@@ -3,8 +3,8 @@
 import sqlalchemy as sa
 from sqlalchemy.sql.expression import bindparam
 
-from sqlalchemy_history.utils import version_table
 from sqlalchemy_history.exc import TableNotVersioned
+from sqlalchemy_history.utils import version_table
 
 
 class VersionExpressionReflector(sa.sql.visitors.ReplacingCloningVisitor):
@@ -21,7 +21,11 @@ class VersionExpressionReflector(sa.sql.visitors.ReplacingCloningVisitor):
             reflected_column = column
         else:
             reflected_column = table.c[column.name]
-            if column in self.relationship.local_columns and table == self.parent.__table__:
+            if (
+                column in self.relationship.local_columns
+                # checks if the attribute exists on the object, compatibly with inheritance
+                and hasattr(self.parent, column.key)
+            ):
                 reflected_column = bindparam(column.key, getattr(self.parent, column.key))
 
         return reflected_column
