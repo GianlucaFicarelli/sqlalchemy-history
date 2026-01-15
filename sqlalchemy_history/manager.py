@@ -89,6 +89,7 @@ class VersioningManager(object):
             "operation_type_column_name": "operation_type",
             "strategy": "validity",
             "use_module_name": False,
+            "enum_prefix": "history_",
         }
         if plugins is None:
             self.plugins = []
