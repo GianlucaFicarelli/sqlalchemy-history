@@ -2,19 +2,18 @@
 module for versioned package
 """
 
+import typing as t
+import warnings
+
 import sqlalchemy as sa
+from sqlalchemy.orm import RelationshipProperty, Session
+from sqlalchemy.sql.selectable import ExecutableReturnsRows
 
 from sqlalchemy_history.exc import ClassNotVersioned
 from sqlalchemy_history.expression_reflector import VersionExpressionReflector
 from sqlalchemy_history.operation import Operation
 from sqlalchemy_history.table_builder import TableBuilder
-from sqlalchemy_history.utils import adapt_columns, version_class, option
-import warnings
-import typing as t
-from sqlalchemy.orm import Session
-from sqlalchemy.orm import RelationshipProperty
-from sqlalchemy.sql.selectable import ExecutableReturnsRows
-
+from sqlalchemy_history.utils import adapt_columns, option, version_class
 
 _T = t.TypeVar("_T")
 
@@ -44,11 +43,12 @@ class RelationshipBuilder(object):
         tx_column = option(obj, "transaction_column_name")
 
         remote_alias = sa.orm.aliased(self.remote_cls)
-        primary_keys = [
-            getattr(remote_alias, column.name)
+        # get the names of the primary keys, removing duplicates in case of table inheritance
+        pk_column_names = {
+            column.name
             for column in sa.inspect(remote_alias).mapper.columns
             if column.primary_key and column.name != tx_column
-        ]
+        }
 
         return sa.exists(
             sa.select(1)
@@ -56,12 +56,12 @@ class RelationshipBuilder(object):
                 sa.and_(
                     getattr(remote_alias, tx_column) <= getattr(obj, tx_column),
                     *[
-                        getattr(remote_alias, pk.name) == getattr(self.remote_cls, pk.name)
-                        for pk in primary_keys
+                        getattr(remote_alias, name) == getattr(self.remote_cls, name)
+                        for name in pk_column_names
                     ],
                 )
             )
-            .group_by(*primary_keys)
+            .group_by(*[getattr(remote_alias, name) for name in pk_column_names])
             .having(sa.func.max(getattr(remote_alias, tx_column)) == getattr(self.remote_cls, tx_column))
             .correlate(self.local_cls, self.remote_cls)
         )
